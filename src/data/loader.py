@@ -165,16 +165,72 @@ def _parse_email_file(filepath: Path) -> dict:
     }
 
 
+def _load_brianray_chunks(folder: Path) -> pd.DataFrame:
+    """
+    Load the brianray/enron-email-dataset (CMU annotated version).
+
+    Reads all chunk CSVs from the data/ subfolder. Passes annotation columns
+    (cat_i_level_1, cat_i_level_2, cat_i_weight) through to the labeler.
+    Unlabeled rows (labeled=False) will fall back to keyword heuristics.
+    """
+    import glob as _glob
+    chunk_files = sorted(_glob.glob(str(folder / "data" / "*chunk*.csv")))
+    if not chunk_files:
+        # Fall back to the full file if chunks aren't present
+        full = list((folder / "data").glob("*.csv"))
+        chunk_files = [str(f) for f in full if "Zone" not in str(f)]
+
+    if not chunk_files:
+        logger.warning("No CSV files found in %s", folder / "data")
+        return pd.DataFrame()
+
+    logger.info("Loading brianray annotated Enron dataset (%d chunk files)...", len(chunk_files))
+
+    # Annotation column names in this dataset
+    cat_cols = []
+    for i in range(1, 13):
+        cat_cols += [f"cat_{i}_level_1", f"cat_{i}_level_2", f"cat_{i}_weight"]
+
+    frames = []
+    for fpath in chunk_files:
+        if "Zone.Identifier" in fpath:
+            continue
+        df_chunk = pd.read_csv(fpath, low_memory=False)
+        records = []
+        for _, row in df_chunk.iterrows():
+            subject = str(row.get("subject", "") or "")
+            sender  = str(row.get("from", "") or "")
+            body    = str(row.get("content", "") or "")[:MAX_TEXT_LENGTH]
+            raw_text = f"{subject} {body}".strip()
+
+            rec = {
+                "subject":   subject,
+                "sender":    sender,
+                "body":      body,
+                "raw_text":  raw_text,
+                "label_raw": "ham",   # entire Enron corpus is legitimate email
+                "source":    "enron_annotated",
+            }
+            # Pass annotation columns through so the labeler can use them
+            for col in cat_cols:
+                rec[col] = row.get(col, None)
+
+            records.append(rec)
+        frames.append(pd.DataFrame(records))
+
+    combined = pd.concat(frames, ignore_index=True)
+    logger.info("Loaded %d emails from brianray annotated Enron dataset", len(combined))
+    return combined
+
+
 def load_enron(path: Path = ENRON_PATH) -> pd.DataFrame:
     """
     Load the Enron email dataset.
 
-    Supports two formats:
-      1. CSV file — drop any Kaggle Enron CSV into data/raw/enron/ (any filename ending in .csv)
-      2. Directory layout — spam/ and ham/ folders containing .txt email files
-
-    CSV is checked first. If a .csv file is found it is used; otherwise the
-    directory tree is walked for .txt files.
+    Priority order:
+      1. brianray annotated dataset (subfolder brianray-enron-email-dataset/)
+      2. Plain CSV file dropped into data/raw/enron/
+      3. Directory layout with spam/ and ham/ folders of .txt files
     """
     records = []
     path = Path(path)
@@ -182,7 +238,13 @@ def load_enron(path: Path = ENRON_PATH) -> pd.DataFrame:
         logger.warning("Enron path does not exist: %s", path)
         return pd.DataFrame()
 
-    # ── CSV mode ───────────────────────────────────────────────────────────────
+    # ── Brianray annotated dataset (highest priority — has CMU labels) ─────────
+    brianray_dir = path / "brianray-enron-email-dataset"
+    if brianray_dir.exists():
+        logger.info("Found brianray annotated Enron dataset — using CMU annotations.")
+        return _load_brianray_chunks(brianray_dir)
+
+    # ── Plain CSV mode ─────────────────────────────────────────────────────────
     csv_files = list(path.glob("*.csv"))
     if csv_files:
         csv_path = csv_files[0]

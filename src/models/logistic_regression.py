@@ -14,8 +14,9 @@ class LogisticRegressionClassifier(BaseEmailClassifier):
         self.random_state = random_state
         self.model = LogisticRegression(
             C=C,
-            solver="lbfgs",
+            solver="saga",
             max_iter=max_iter,
+            class_weight="balanced",
             random_state=random_state,
         )
         self._feature_names = None
@@ -34,15 +35,19 @@ class LogisticRegressionClassifier(BaseEmailClassifier):
         self._feature_names = feature_names
 
     def get_top_features_per_class(self, n: int = 10) -> dict:
-        """Return top-n TF-IDF tokens per class by coefficient magnitude."""
+        """Return top-n TF-IDF tokens per class by coefficient magnitude.
+        Only considers indices within the range of the provided feature names."""
         if self._feature_names is None:
             return {}
         result = {}
         classes = self.model.classes_
         coef = self.model.coef_  # shape: (n_classes, n_features)
+        n_named = len(self._feature_names)
         for i, cls in enumerate(classes):
-            top_idx = np.argsort(coef[i])[-n:][::-1]
-            result[cls] = [(self._feature_names[j], coef[i][j]) for j in top_idx]
+            # Restrict to the TF-IDF slice of the coefficient vector
+            tfidf_coef = coef[i][:n_named]
+            top_idx = np.argsort(tfidf_coef)[-n:][::-1]
+            result[cls] = [(self._feature_names[j], tfidf_coef[j]) for j in top_idx]
         return result
 
     def get_params(self) -> dict:

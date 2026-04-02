@@ -17,7 +17,7 @@ class SVMClassifier(BaseEmailClassifier):
         self.C = C
         self.max_iter = max_iter
         self.random_state = random_state
-        base = LinearSVC(C=C, max_iter=max_iter, random_state=random_state, dual=True)
+        base = LinearSVC(C=C, max_iter=max_iter, random_state=random_state, dual=True, class_weight="balanced")
         self.model = CalibratedClassifierCV(base, cv=3)
 
     def fit(self, X_train, y_train):

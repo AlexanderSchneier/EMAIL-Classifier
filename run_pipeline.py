@@ -69,7 +69,12 @@ def parse_args():
     p.add_argument(
         "--skip-preprocessing",
         action="store_true",
-        help="Load preprocessed CSV from data/processed/ instead of re-parsing raw files",
+        help="Deprecated — preprocessing is now skipped automatically if the processed file exists.",
+    )
+    p.add_argument(
+        "--force-preprocess",
+        action="store_true",
+        help="Delete the cached processed file and re-run preprocessing from raw data",
     )
     p.add_argument(
         "--max-samples",
@@ -82,14 +87,62 @@ def parse_args():
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
+def _stratified_sample(df, max_samples: int, min_per_class: int = 200):
+    """Sample max_samples rows, guaranteeing at least min_per_class per class."""
+    import pandas as pd
+    classes = df["label"].unique()
+    parts = []
+    remaining = max_samples
+    for cls in classes:
+        cls_df = df[df["label"] == cls]
+        take = min(min_per_class, len(cls_df))
+        parts.append(cls_df.sample(n=take, random_state=RANDOM_SEED))
+        remaining -= take
+    leftover = df[~df.index.isin(pd.concat(parts).index)]
+    if remaining > 0 and len(leftover) > 0:
+        extra = leftover.sample(n=min(remaining, len(leftover)), random_state=RANDOM_SEED)
+        parts.append(extra)
+    return pd.concat(parts).sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
+
+
+def _load_processed(processed_csv) -> "pd.DataFrame":
+    import pandas as pd
+    df = pd.read_csv(processed_csv)
+    for col in ("clean_text", "subject", "sender", "body"):
+        df[col] = df[col].fillna("")
+    return df
+
+
 def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
     processed_csv = PROCESSED_DIR / "emails_processed.csv"
 
-    if skip_preprocessing and processed_csv.exists():
-        import pandas as pd
+    # ── Already preprocessed — just load and optionally sample ───────────────
+    if processed_csv.exists() and skip_preprocessing:
         logger.info("Loading preprocessed data from %s", processed_csv)
-        return pd.read_csv(processed_csv)
+        df = _load_processed(processed_csv)
+        if max_samples and len(df) > max_samples:
+            df = _stratified_sample(df, max_samples)
+            logger.info("Stratified sample: %d emails", len(df))
+            from src.data.labeler import label_distribution
+            label_distribution(df)
+        return df
 
+    # ── Full preprocessed file exists — skip raw loading/preprocessing ────────
+    if processed_csv.exists() and not skip_preprocessing:
+        logger.info(
+            "Preprocessed file already exists at %s. "
+            "Using it to avoid reprocessing. Pass --force-preprocess to redo.",
+            processed_csv,
+        )
+        df = _load_processed(processed_csv)
+        if max_samples and len(df) > max_samples:
+            df = _stratified_sample(df, max_samples)
+            logger.info("Stratified sample: %d emails", len(df))
+            from src.data.labeler import label_distribution
+            label_distribution(df)
+        return df
+
+    # ── No processed file — load raw, preprocess, label, save ────────────────
     logger.info("Loading raw email data (dataset=%s)...", dataset)
     if dataset == "enron":
         df = load_enron()
@@ -104,15 +157,21 @@ def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
             "Make sure email files are in data/raw/enron/ and/or data/raw/spamassassin/."
         )
 
-    if max_samples and len(df) > max_samples:
-        df = df.sample(n=max_samples, random_state=RANDOM_SEED).reset_index(drop=True)
-        logger.info("Sampled %d emails (--max-samples)", max_samples)
-
     logger.info("Preprocessing text...")
     df = preprocess(df)
 
     logger.info("Applying multi-class labels...")
     df = apply_labels(df)
+
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_csv(processed_csv, index=False)
+    logger.info("Full preprocessed data saved to %s (%d emails)", processed_csv, len(df))
+
+    if max_samples and len(df) > max_samples:
+        df = _stratified_sample(df, max_samples)
+        logger.info("Stratified sample: %d emails", len(df))
+        from src.data.labeler import label_distribution
+        label_distribution(df)
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df.to_csv(processed_csv, index=False)
@@ -178,6 +237,10 @@ def main():
         model_keys = [k.strip() for k in args.models.split(",")]
 
     # ── Load & split ──────────────────────────────────────────────────────────
+    if args.force_preprocess and (PROCESSED_DIR / "emails_processed.csv").exists():
+        (PROCESSED_DIR / "emails_processed.csv").unlink()
+        logger.info("Deleted cached processed file — will reprocess from raw data.")
+
     df = load_data(args.dataset, args.skip_preprocessing, args.max_samples)
 
     df_train, df_test = train_test_split(

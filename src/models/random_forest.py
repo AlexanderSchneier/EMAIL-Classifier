@@ -34,6 +34,7 @@ class RandomForestEmailClassifier(BaseEmailClassifier):
         self.model = RandomForestClassifier(
             n_estimators=n_estimators,
             random_state=random_state,
+            class_weight="balanced",
             n_jobs=-1,
         )
         self._fitted = False

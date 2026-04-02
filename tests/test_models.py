@@ -17,12 +17,12 @@ from src.models.random_forest import RandomForestEmailClassifier
 from src.models.neural_network import NeuralNetworkClassifier
 
 
-LABELS_5 = ["spam", "phishing", "promotions", "social", "personal_work"]
-N_SAMPLES = 100
+LABELS_6 = ["spam", "phishing", "promotions", "social", "personal", "work"]
+N_SAMPLES = 120
 N_FEATURES = 50
 
 
-def _make_data(n_classes=5):
+def _make_data(n_classes=6):
     """Synthetic sparse feature matrix with multi-class labels."""
     X, y_int = make_classification(
         n_samples=N_SAMPLES,
@@ -35,7 +35,7 @@ def _make_data(n_classes=5):
     # Make X non-negative for NB and convert to sparse
     X = np.abs(X)
     X_sparse = sp.csr_matrix(X)
-    y = np.array(LABELS_5[:n_classes])[y_int]
+    y = np.array(LABELS_6[:n_classes])[y_int]
     split = int(0.8 * N_SAMPLES)
     return X_sparse[:split], X_sparse[split:], y[:split], y[split:]
 
@@ -49,7 +49,7 @@ def _check_model(clf, X_tr=X_train, X_te=X_test, y_tr=y_train, y_te=y_test):
     clf.fit(X_tr, y_tr)
     preds = clf.predict(X_te)
     assert len(preds) == len(y_te)
-    assert all(p in LABELS_5 for p in preds)
+    assert all(p in LABELS_6 for p in preds)
     return preds
 
 

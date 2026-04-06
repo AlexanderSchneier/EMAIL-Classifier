@@ -12,7 +12,7 @@ FIGURES_DIR = OUTPUTS_DIR / "figures"
 RESULTS_DIR = OUTPUTS_DIR / "results"
 
 # ── Labels ─────────────────────────────────────────────────────────────────────
-LABELS = ["spam", "phishing", "promotions", "social", "personal", "work"]
+LABELS = ["spam", "personal", "work"]
 
 # ── Preprocessing ──────────────────────────────────────────────────────────────
 USE_STEMMING = False      # False → lemmatization, True → stemming

@@ -220,6 +220,17 @@ def _load_brianray_chunks(folder: Path) -> pd.DataFrame:
 
     combined = pd.concat(frames, ignore_index=True)
     logger.info("Loaded %d emails from brianray annotated Enron dataset", len(combined))
+
+    # Keep only rows with at least one CMU annotation
+    if "cat_1_level_1" in combined.columns:
+        annotated_mask = combined["cat_1_level_1"].notna()
+        n_before = len(combined)
+        combined = combined[annotated_mask].reset_index(drop=True)
+        logger.info(
+            "Filtered to CMU-annotated rows only: %d → %d emails",
+            n_before, len(combined),
+        )
+
     return combined
 
 

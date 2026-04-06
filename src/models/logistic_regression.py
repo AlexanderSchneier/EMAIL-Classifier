@@ -8,13 +8,13 @@ from src.models.base_model import BaseEmailClassifier
 
 class LogisticRegressionClassifier(BaseEmailClassifier):
 
-    def __init__(self, C: float = 1.0, max_iter: int = 1000, random_state: int = 42):
+    def __init__(self, C: float = 1.0, max_iter: int = 5000, random_state: int = 42):
         self.C = C
         self.max_iter = max_iter
         self.random_state = random_state
         self.model = LogisticRegression(
             C=C,
-            solver="saga",
+            solver="lbfgs",
             max_iter=max_iter,
             class_weight="balanced",
             random_state=random_state,

@@ -163,6 +163,12 @@ def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
     logger.info("Applying multi-class labels...")
     df = apply_labels(df)
 
+    # Drop rows whose label is not in the configured LABELS list
+    before = len(df)
+    df = df[df["label"].isin(LABELS)].reset_index(drop=True)
+    if len(df) < before:
+        logger.info("Dropped %d rows with labels outside %s", before - len(df), LABELS)
+
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df.to_csv(processed_csv, index=False)
     logger.info("Full preprocessed data saved to %s (%d emails)", processed_csv, len(df))

@@ -3,7 +3,9 @@
 **Pattern Recognition Final Project**
 Upi Shanker & Alexander Schneier
 
-A machine learning pipeline that classifies emails into five categories: **spam, phishing, promotions, social/notifications, and personal/work**. Goes beyond traditional binary spam detection by combining word-level TF-IDF, character n-grams, and sender metadata features across five different classifiers.
+A machine learning pipeline that classifies emails into six categories: **spam, phishing, promotions, social/notifications, personal, and work**. Goes beyond traditional binary spam detection by combining word-level TF-IDF, character n-grams, and sender metadata features across five different classifiers.
+
+> **Active label set:** `config/settings.py` has a `LABELS` list that filters which classes are kept after labeling. It defaults to `["spam", "personal", "work"]`. Edit it to `["spam", "phishing", "promotions", "social", "personal", "work"]` for the full six-class setup.
 
 ---
 
@@ -90,10 +92,11 @@ Lists all Python dependencies. Install with `pip install -r requirements.txt`.
 Central configuration file. Every constant used across the project is defined here — file paths, label names, feature hyperparameters, train/test split ratio, random seed, and keyword lists used for label assignment. Edit this file to tune the project without touching any other code.
 
 Key settings:
-- `LABELS` — the five class names
+- `LABELS` — the active class names (filters which labels are kept after labeling; defaults to `["spam", "personal", "work"]`)
 - `MAX_TFIDF_FEATURES`, `TFIDF_NGRAM_RANGE` — controls word TF-IDF vocabulary size
 - `SVD_COMPONENTS` — number of latent dimensions for Random Forest and MLP
-- `PHISHING_KEYWORDS`, `PROMOTIONS_KEYWORDS`, `SOCIAL_KEYWORDS` — heuristics used to split binary labels into five classes
+- `CMU_LABEL_MAP` — maps CMU annotation codes to class labels (used with the brianray Enron dataset)
+- `PHISHING_KEYWORDS`, `PROMOTIONS_KEYWORDS`, `SOCIAL_KEYWORDS`, `WORK_KEYWORDS`, `PERSONAL_KEYWORDS` — heuristics used to split binary labels into six classes when CMU annotations are absent
 
 ---
 
@@ -101,8 +104,13 @@ Key settings:
 
 Reads raw `.txt` email files from disk using Python's standard library `email` module, which handles MIME encoding, multipart bodies, and charset decoding automatically.
 
-- `load_enron(path)` — walks `data/raw/enron/spam/` and `data/raw/enron/ham/` and returns a DataFrame
-- `load_spamassassin(path)` — walks `data/raw/spamassassin/` subdirectories (spam, easy_ham, hard_ham)
+Supports multiple Enron formats in priority order:
+1. **brianray CMU-annotated dataset** (`data/raw/enron/brianray-enron-email-dataset/`) — preferred; passes CMU genre annotations to the labeler
+2. **Plain CSV** (`data/raw/enron/*.csv`) — auto-detects common Kaggle column layouts
+3. **spam/ham folder layout** — walks `data/raw/enron/spam/` and `data/raw/enron/ham/`
+
+- `load_enron(path)` — loads using the highest-priority format found
+- `load_spamassassin(path)` — walks `data/raw/spamassassin/` subdirectories (spam, easy_ham, hard_ham, spam_2, easy_ham_2)
 - `load_all()` — calls both loaders and concatenates the results
 
 Output columns: `subject`, `sender`, `body`, `raw_text`, `label_raw`, `source`
@@ -126,10 +134,13 @@ Steps applied in order:
 
 ### `src/data/labeler.py`
 
-Converts binary `spam`/`ham` labels from the source datasets into the five-class schema using keyword heuristics.
+Converts binary `spam`/`ham` labels from the source datasets into the six-class schema.
 
+**Primary path — CMU annotations (brianray Enron dataset):** genre/topic codes (`cat_i_level_1`, `cat_i_level_2`, `cat_i_weight`) are mapped to classes via `CMU_LABEL_MAP` in `settings.py`. The highest-weight annotation wins when multiple slots are populated.
+
+**Fallback — keyword heuristics (all other data):**
 - `spam` emails → checked for phishing keywords → classified as `phishing` or `spam`
-- `ham` emails → checked for promotions and social keywords → classified as `promotions`, `social`, or `personal_work`
+- `ham` emails → checked in priority order for promotions, social, work, and personal keywords
 
 The keyword lists are defined in `config/settings.py` and can be extended. Also logs a class distribution summary and warns if any class has fewer than 2% of samples.
 
@@ -330,10 +341,10 @@ python run_pipeline.py --models all
 
 ### Skip re-preprocessing (reuse saved CSV)
 
-After the first run, the processed data is saved to `data/processed/emails_processed.csv`. Use `--skip-preprocessing` to skip raw file parsing on subsequent runs:
+After the first run, the processed data is saved to `data/processed/emails_processed.csv`. The pipeline **automatically reuses this file** on subsequent runs — no flag needed. To force re-processing from raw data:
 
 ```bash
-python run_pipeline.py --skip-preprocessing
+python run_pipeline.py --force-preprocess
 ```
 
 ### Run tests

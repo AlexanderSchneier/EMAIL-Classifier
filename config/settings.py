@@ -7,12 +7,13 @@ RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 ENRON_PATH = RAW_DIR / "enron"
 SPAMASSASSIN_PATH = RAW_DIR / "spamassassin"
+PHISHING_PATH = RAW_DIR / "phishing"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 FIGURES_DIR = OUTPUTS_DIR / "figures"
 RESULTS_DIR = OUTPUTS_DIR / "results"
 
 # ── Labels ─────────────────────────────────────────────────────────────────────
-LABELS = ["spam", "personal", "work"]
+LABELS = ["spam", "phishing", "personal", "work"]
 
 # ── Preprocessing ──────────────────────────────────────────────────────────────
 USE_STEMMING = False      # False → lemmatization, True → stemming

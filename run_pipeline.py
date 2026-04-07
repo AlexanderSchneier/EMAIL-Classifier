@@ -25,7 +25,7 @@ from config.settings import (
     TEST_SIZE,
     LABELS,
 )
-from src.data.loader import load_enron, load_spamassassin, load_all
+from src.data.loader import load_enron, load_spamassassin, load_all, load_phishing
 from src.data.preprocessor import preprocess
 from src.data.labeler import apply_labels
 from src.features.tfidf_features import TfidfFeatures
@@ -81,6 +81,12 @@ def parse_args():
         type=int,
         default=None,
         help="Randomly sample N emails before preprocessing (useful for quick testing)",
+    )
+    p.add_argument(
+        "--add-phishing",
+        action="store_true",
+        help="Preprocess only the Nazario phishing corpus and append it to the existing "
+             "processed CSV, then run the pipeline. Skips reprocessing all other data.",
     )
     return p.parse_args()
 
@@ -185,6 +191,58 @@ def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
     return df
 
 
+# ── Phishing append ───────────────────────────────────────────────────────────
+
+def append_phishing():
+    """
+    Preprocess only the Nazario phishing corpus and merge it into the existing
+    processed CSV. Does not touch any other data.
+    """
+    import pandas as pd
+
+    processed_csv = PROCESSED_DIR / "emails_processed.csv"
+    if not processed_csv.exists():
+        raise SystemExit(
+            "ERROR: No existing processed file found at %s.\n"
+            "Run the pipeline once without --add-phishing first." % processed_csv
+        )
+
+    logger.info("Loading existing processed data from %s", processed_csv)
+    df_existing = _load_processed(processed_csv)
+
+    if "phishing" in df_existing["label"].values:
+        logger.info(
+            "Phishing rows already present in processed file (%d rows). "
+            "Remove them first with --force-preprocess if you want to re-add.",
+            (df_existing["label"] == "phishing").sum(),
+        )
+        return df_existing
+
+    logger.info("Loading Nazario phishing corpus...")
+    df_raw = load_phishing()
+    if df_raw.empty:
+        raise SystemExit(
+            "ERROR: No phishing data found. "
+            "Run: python scripts/download_data.py --phishing"
+        )
+
+    logger.info("Preprocessing %d phishing emails...", len(df_raw))
+    df_raw = preprocess(df_raw)
+    df_raw = apply_labels(df_raw)   # passes through label_raw='phishing' directly
+
+    # Keep only the columns present in the existing CSV
+    shared_cols = [c for c in df_existing.columns if c in df_raw.columns]
+    df_raw = df_raw[shared_cols]
+
+    df_combined = pd.concat([df_existing, df_raw], ignore_index=True)
+    df_combined.to_csv(processed_csv, index=False)
+    logger.info(
+        "Appended %d phishing rows → processed file now has %d emails",
+        len(df_raw), len(df_combined),
+    )
+    return df_combined
+
+
 # ── Feature extraction ────────────────────────────────────────────────────────
 
 def extract_features(df_train, df_test):
@@ -247,7 +305,10 @@ def main():
         (PROCESSED_DIR / "emails_processed.csv").unlink()
         logger.info("Deleted cached processed file — will reprocess from raw data.")
 
-    df = load_data(args.dataset, args.skip_preprocessing, args.max_samples)
+    if args.add_phishing:
+        df = append_phishing()
+    else:
+        df = load_data(args.dataset, args.skip_preprocessing, args.max_samples)
 
     df_train, df_test = train_test_split(
         df,

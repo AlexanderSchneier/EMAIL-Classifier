@@ -70,10 +70,15 @@ def _label_from_keywords(row: pd.Series) -> str:
     """
     Keyword heuristic fallback for unlabeled records.
 
-    spam/phishing are split from SpamAssassin's binary spam label.
-    promotions/social/personal/work are split from ham.
+    Nazario phishing emails carry label_raw='phishing' and are passed through directly.
+    SpamAssassin spam is split into spam/phishing by keyword.
+    Ham is split into work/personal by keyword.
     """
     combined = f"{row.get('subject', '')} {row.get('body', '')}"
+
+    # Nazario corpus emails are already definitively labeled
+    if row["label_raw"] == "phishing":
+        return "phishing"
 
     if row["label_raw"] == "spam":
         if _contains_any(combined, PHISHING_KEYWORDS):

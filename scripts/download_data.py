@@ -3,16 +3,18 @@
 Download email datasets for the classifier pipeline.
 
 SpamAssassin: downloaded automatically from Apache's public corpus (no account needed).
+Phishing:     downloaded automatically from the Nazario phishing corpus (no account needed).
 Enron:        downloaded via the Kaggle API (requires a free Kaggle account).
 
 Usage:
-    # Download only SpamAssassin (no account needed)
+    # Download SpamAssassin and Nazario phishing (no account needed)
     python scripts/download_data.py --spamassassin
+    python scripts/download_data.py --phishing
 
     # Download only Enron (requires kaggle credentials)
     python scripts/download_data.py --enron
 
-    # Download both
+    # Download everything
     python scripts/download_data.py --all
 
 Kaggle setup (one-time, only needed for Enron):
@@ -31,7 +33,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config.settings import ENRON_PATH, SPAMASSASSIN_PATH
+from config.settings import ENRON_PATH, SPAMASSASSIN_PATH, PHISHING_PATH
 
 # ── SpamAssassin corpus files (Apache public corpus, no auth required) ─────────
 SPAMASSASSIN_FILES = [
@@ -42,6 +44,17 @@ SPAMASSASSIN_FILES = [
     ("20030228_easy_ham_2.tar.bz2", "easy_ham_2"),
 ]
 SPAMASSASSIN_BASE_URL = "https://spamassassin.apache.org/old/publiccorpus/"
+
+# ── Nazario phishing corpus ───────────────────────────────────────────────────
+# José Nazario's phishing corpus — real phishing emails collected from honeypots.
+# ~6,000 messages across 4 mbox files. Public domain, no account required.
+NAZARIO_FILES = [
+    "phishing0.mbox",
+    "phishing2.mbox",
+    "phishing3.mbox",
+    "phishing5.mbox",
+]
+NAZARIO_BASE_URL = "http://monkey.org/~jose/phishing/"
 
 # ── Enron dataset on Kaggle ────────────────────────────────────────────────────
 # Dataset: https://www.kaggle.com/datasets/wanderfj/enron-spam
@@ -110,6 +123,36 @@ def download_spamassassin():
     print(f"Location: {SPAMASSASSIN_PATH}")
 
 
+# ── Nazario phishing corpus ───────────────────────────────────────────────────
+
+def download_phishing():
+    print("\n=== Nazario Phishing Corpus ===")
+    PHISHING_PATH.mkdir(parents=True, exist_ok=True)
+
+    any_downloaded = False
+    for filename in NAZARIO_FILES:
+        dest = PHISHING_PATH / filename
+        if dest.exists() and dest.stat().st_size > 0:
+            print(f"  {filename} already exists — skipping.")
+            continue
+
+        url = NAZARIO_BASE_URL + filename
+        try:
+            _download_file(url, dest)
+            print(f"  {filename} ready.")
+            any_downloaded = True
+        except Exception as e:
+            print(f"  WARNING: Could not download {filename}: {e}")
+            print(f"  You can manually download it from {url}")
+            print(f"  and place it at {dest}")
+
+    mbox_files = list(PHISHING_PATH.glob("*.mbox"))
+    if mbox_files:
+        print(f"Phishing corpus ready — {len(mbox_files)} mbox file(s) in {PHISHING_PATH}")
+    else:
+        print("No phishing mbox files downloaded. See warnings above.")
+
+
 # ── Enron ─────────────────────────────────────────────────────────────────────
 
 def download_enron():
@@ -165,12 +208,16 @@ def main():
     p = argparse.ArgumentParser(description="Download email datasets")
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--spamassassin", action="store_true", help="Download SpamAssassin corpus only")
+    group.add_argument("--phishing", action="store_true", help="Download Nazario phishing corpus only")
     group.add_argument("--enron", action="store_true", help="Download Enron dataset only (requires Kaggle)")
-    group.add_argument("--all", action="store_true", help="Download both datasets")
+    group.add_argument("--all", action="store_true", help="Download all datasets")
     args = p.parse_args()
 
     if args.spamassassin or args.all:
         download_spamassassin()
+
+    if args.phishing or args.all:
+        download_phishing()
 
     if args.enron or args.all:
         download_enron()

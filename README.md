@@ -5,7 +5,7 @@ Upi Shanker & Alexander Schneier
 
 A machine learning pipeline that classifies emails into six categories: **spam, phishing, promotions, social/notifications, personal, and work**. Goes beyond traditional binary spam detection by combining word-level TF-IDF, character n-grams, and sender metadata features across five different classifiers.
 
-> **Active label set:** `config/settings.py` has a `LABELS` list that filters which classes are kept after labeling. It defaults to `["spam", "personal", "work"]`. Edit it to `["spam", "phishing", "promotions", "social", "personal", "work"]` for the full six-class setup.
+> **Active label set:** `config/settings.py` has a `LABELS` list that controls which classes are used. It is set to `["spam", "phishing", "personal", "work"]`. Phishing labels come from the Nazario phishing corpus (real ground truth); the remaining classes come from CMU-annotated Enron data.
 
 ---
 
@@ -34,7 +34,8 @@ EMAIL-Classifier/
 ├── data/
 │   ├── raw/
 │   │   ├── enron/
-│   │   └── spamassassin/
+│   │   ├── spamassassin/
+│   │   └── phishing/        ← Nazario .mbox files go here
 │   └── processed/
 ├── src/
 │   ├── data/
@@ -77,7 +78,7 @@ The main entry point. Runs the entire pipeline end-to-end: loads data, preproces
 
 ### `scripts/download_data.py`
 
-Downloads both datasets automatically. SpamAssassin is pulled directly from Apache's public corpus (no credentials needed). Enron is pulled via the Kaggle API (free account required). Run with `--spamassassin`, `--enron`, or `--all`. See [Getting the Data](#getting-the-data) for full setup instructions.
+Downloads all datasets automatically. SpamAssassin and the Nazario phishing corpus are pulled from public servers (no credentials needed). Enron is pulled via the Kaggle API (free account required). Run with `--spamassassin`, `--phishing`, `--enron`, or `--all`. See [Getting the Data](#getting-the-data) for full setup instructions.
 
 ---
 
@@ -92,7 +93,7 @@ Lists all Python dependencies. Install with `pip install -r requirements.txt`.
 Central configuration file. Every constant used across the project is defined here — file paths, label names, feature hyperparameters, train/test split ratio, random seed, and keyword lists used for label assignment. Edit this file to tune the project without touching any other code.
 
 Key settings:
-- `LABELS` — the active class names (filters which labels are kept after labeling; defaults to `["spam", "personal", "work"]`)
+- `LABELS` — the active class names (defaults to `["spam", "personal", "work"]`, the only classes with human-annotated ground truth in the included datasets)
 - `MAX_TFIDF_FEATURES`, `TFIDF_NGRAM_RANGE` — controls word TF-IDF vocabulary size
 - `SVD_COMPONENTS` — number of latent dimensions for Random Forest and MLP
 - `CMU_LABEL_MAP` — maps CMU annotation codes to class labels (used with the brianray Enron dataset)
@@ -262,16 +263,19 @@ A download script is included that handles both datasets automatically.
 
 ### Option A — Download everything with one command
 
-**SpamAssassin** requires no account. **Enron** requires a free Kaggle account (setup below).
+**SpamAssassin** and **Nazario phishing** require no account. **Enron** requires a free Kaggle account (setup below).
 
 ```bash
-# SpamAssassin only (no account needed — start here)
+# SpamAssassin only (no account needed)
 python scripts/download_data.py --spamassassin
+
+# Nazario phishing corpus (no account needed)
+python scripts/download_data.py --phishing
 
 # Enron only (requires Kaggle credentials)
 python scripts/download_data.py --enron
 
-# Both at once
+# Everything at once
 python scripts/download_data.py --all
 ```
 

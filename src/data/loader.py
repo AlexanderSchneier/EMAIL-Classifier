@@ -1,14 +1,15 @@
-"""Load raw email files from Enron and SpamAssassin datasets into a unified DataFrame."""
+"""Load raw email files from Enron, SpamAssassin, and Nazario phishing datasets into a unified DataFrame."""
 
 import email
 import email.policy
 import logging
+import mailbox
 import os
 from pathlib import Path
 
 import pandas as pd
 
-from config.settings import ENRON_PATH, SPAMASSASSIN_PATH, MAX_TEXT_LENGTH
+from config.settings import ENRON_PATH, SPAMASSASSIN_PATH, PHISHING_PATH, MAX_TEXT_LENGTH
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +333,82 @@ def load_spamassassin(path: Path = SPAMASSASSIN_PATH) -> pd.DataFrame:
     return df
 
 
+def load_phishing(path: Path = PHISHING_PATH) -> pd.DataFrame:
+    """
+    Load the Nazario phishing corpus (.mbox files).
+
+    Expected layout:
+        data/raw/phishing/
+            phishing0.mbox
+            phishing2.mbox
+            phishing3.mbox
+            ...
+
+    Every message is labeled directly as 'phishing' — no heuristics needed.
+    Download with: python scripts/download_data.py --phishing
+    """
+    path = Path(path)
+    if not path.exists():
+        logger.warning("Phishing path does not exist: %s", path)
+        return pd.DataFrame()
+
+    mbox_files = list(path.glob("*.mbox"))
+    if not mbox_files:
+        logger.warning("No .mbox files found in %s", path)
+        return pd.DataFrame()
+
+    records = []
+    for mbox_path in sorted(mbox_files):
+        logger.info("Loading phishing mbox: %s", mbox_path.name)
+        try:
+            mbox = mailbox.mbox(str(mbox_path))
+        except Exception as e:
+            logger.warning("Failed to open %s: %s", mbox_path, e)
+            continue
+
+        for msg in mbox:
+            try:
+                subject = msg.get("Subject", "") or ""
+                sender = msg.get("From", "") or ""
+
+                body_parts = []
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == "text/plain":
+                            try:
+                                payload = part.get_payload(decode=True)
+                                charset = part.get_content_charset() or "utf-8"
+                                body_parts.append(payload.decode(charset, errors="replace"))
+                            except Exception:
+                                pass
+                else:
+                    try:
+                        payload = msg.get_payload(decode=True)
+                        if payload:
+                            charset = msg.get_content_charset() or "utf-8"
+                            body_parts.append(payload.decode(charset, errors="replace"))
+                    except Exception:
+                        body_parts.append(str(msg.get_payload() or ""))
+
+                body = " ".join(body_parts)[:MAX_TEXT_LENGTH]
+                raw_text = f"{subject} {body}".strip()
+
+                records.append({
+                    "subject": subject,
+                    "sender": sender,
+                    "body": body,
+                    "raw_text": raw_text,
+                    "label_raw": "phishing",
+                    "source": "nazario",
+                })
+            except Exception as e:
+                logger.warning("Skipping malformed message in %s: %s", mbox_path.name, e)
+
+    df = pd.DataFrame(records)
+    logger.info("Loaded %d phishing emails from Nazario corpus", len(df))
+    return df
+
+
 def load_all() -> pd.DataFrame:
     """Load and concatenate all available datasets."""
     frames = []
@@ -343,9 +420,14 @@ def load_all() -> pd.DataFrame:
     if not sa_df.empty:
         frames.append(sa_df)
 
+    phishing_df = load_phishing()
+    if not phishing_df.empty:
+        frames.append(phishing_df)
+
     if not frames:
         raise FileNotFoundError(
-            "No data found. Place email files under data/raw/enron/ and/or data/raw/spamassassin/."
+            "No data found. Place email files under data/raw/enron/, data/raw/spamassassin/, "
+            "and/or data/raw/phishing/."
         )
 
     combined = pd.concat(frames, ignore_index=True)

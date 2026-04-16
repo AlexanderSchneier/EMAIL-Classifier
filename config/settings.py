@@ -6,7 +6,6 @@ DATA_DIR = BASE_DIR / "data"
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 ENRON_PATH = RAW_DIR / "enron"
-SPAMASSASSIN_PATH = RAW_DIR / "spamassassin"
 PHISHING_PATH = RAW_DIR / "phishing"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 FIGURES_DIR = OUTPUTS_DIR / "figures"
@@ -16,7 +15,6 @@ RESULTS_DIR = OUTPUTS_DIR / "results"
 LABELS = ["spam", "phishing", "personal", "work"]
 
 # ── Preprocessing ──────────────────────────────────────────────────────────────
-USE_STEMMING = False      # False → lemmatization, True → stemming
 MAX_TEXT_LENGTH = 50_000  # characters, truncate extremely long bodies
 
 # ── Feature extraction ─────────────────────────────────────────────────────────
@@ -42,23 +40,6 @@ PHISHING_KEYWORDS = [
     "claim your prize", "inheritance", "nigerian", "prince",
 ]
 
-# ── Promotions keyword heuristics ──────────────────────────────────────────────
-PROMOTIONS_KEYWORDS = [
-    "unsubscribe", "opt out", "sale", "offer", "deal", "discount",
-    "% off", "coupon", "promo", "newsletter", "subscribe", "shop now",
-    "buy now", "free shipping", "limited offer", "exclusive", "savings",
-    "clearance", "black friday", "cyber monday",
-]
-
-# ── Social/notification keyword heuristics ─────────────────────────────────────
-SOCIAL_KEYWORDS = [
-    "notification", "alert", "linkedin", "twitter", "facebook", "instagram",
-    "friend request", "connection request", "mention", "comment", "liked",
-    "followed", "new message", "you have a new", "account update",
-    "github", "slack", "zoom", "calendar invite", "meeting reminder",
-    "google alert", "new follower",
-]
-
 # ── Work keyword heuristics (professional/task-oriented ham) ───────────────────
 WORK_KEYWORDS = [
     "meeting", "agenda", "attached", "please review", "conference", "schedule",
@@ -79,7 +60,7 @@ PERSONAL_KEYWORDS = [
     "camaraderie", "friendship", "affection", "gratitude",
 ]
 
-# ── CMU Enron annotation → 6-class mapping ────────────────────────────────────
+# ── CMU Enron annotation → 4-class mapping ────────────────────────────────────
 # Keys are coarse genre / topic / emotional tone codes from the CMU annotation.
 # Values are the target class label.
 CMU_LABEL_MAP = {
@@ -91,16 +72,6 @@ CMU_LABEL_MAP = {
     # Personal
     "1.2": "personal",  # Purely Personal
     "1.3": "personal",  # Personal in Professional Context
-    # Social
-    "2.11": "social",   # Jokes/Humor
-    "2.12": "social",   # Jokes/Humor (subtype)
-    "4.4":  "social",   # Camaraderie
-    "4.6":  "social",   # Gratitude
-    "4.7":  "social",   # Friendship/Affection
-    # Promotions
-    "2.7":  "promotions",  # Press Releases
-    "2.10": "promotions",  # Newsletters
-    "3.4":  "promotions",  # Company Image / Influencing
     # Spam (empty/low-content messages)
     "1.7":  "spam",
     "1.8":  "spam",

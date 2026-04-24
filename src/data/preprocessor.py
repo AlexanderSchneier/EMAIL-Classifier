@@ -6,8 +6,6 @@ import re
 import nltk
 import pandas as pd
 
-from config.settings import USE_STEMMING
-
 logger = logging.getLogger(__name__)
 
 # Download required NLTK data once
@@ -21,11 +19,10 @@ def _ensure_nltk():
 _ensure_nltk()
 
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer, WordNetLemmatizer
+from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 
 _STOP_WORDS = set(stopwords.words("english"))
-_STEMMER = PorterStemmer()
 _LEMMATIZER = WordNetLemmatizer()
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -48,10 +45,7 @@ def _clean_text(text: str) -> str:
 def _normalize_tokens(text: str) -> str:
     tokens = word_tokenize(text)
     tokens = [t for t in tokens if t not in _STOP_WORDS and len(t) > 2]
-    if USE_STEMMING:
-        tokens = [_STEMMER.stem(t) for t in tokens]
-    else:
-        tokens = [_LEMMATIZER.lemmatize(t) for t in tokens]
+    tokens = [_LEMMATIZER.lemmatize(t) for t in tokens]
     return " ".join(tokens)
 
 

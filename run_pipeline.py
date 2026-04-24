@@ -25,7 +25,7 @@ from config.settings import (
     TEST_SIZE,
     LABELS,
 )
-from src.data.loader import load_enron, load_spamassassin, load_all, load_phishing
+from src.data.loader import load_enron, load_all, load_phishing
 from src.data.preprocessor import preprocess
 from src.data.labeler import apply_labels
 from src.features.tfidf_features import TfidfFeatures
@@ -57,19 +57,14 @@ def parse_args():
     p = argparse.ArgumentParser(description="Email multi-class classifier pipeline")
     p.add_argument(
         "--dataset",
-        choices=["enron", "spamassassin", "both"],
+        choices=["enron", "both"],
         default="both",
-        help="Which dataset(s) to use (default: both)",
+        help="Which dataset(s) to use: 'enron' for Enron only, 'both' for Enron + phishing (default: both)",
     )
     p.add_argument(
         "--models",
         default="all",
         help="Comma-separated model keys or 'all'. Options: nb,lr,svm,rf,nn",
-    )
-    p.add_argument(
-        "--skip-preprocessing",
-        action="store_true",
-        help="Deprecated — preprocessing is now skipped automatically if the processed file exists.",
     )
     p.add_argument(
         "--force-preprocess",
@@ -119,22 +114,11 @@ def _load_processed(processed_csv) -> "pd.DataFrame":
     return df
 
 
-def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
+def load_data(dataset: str, max_samples: int = None):
     processed_csv = PROCESSED_DIR / "emails_processed.csv"
 
-    # ── Already preprocessed — just load and optionally sample ───────────────
-    if processed_csv.exists() and skip_preprocessing:
-        logger.info("Loading preprocessed data from %s", processed_csv)
-        df = _load_processed(processed_csv)
-        if max_samples and len(df) > max_samples:
-            df = _stratified_sample(df, max_samples)
-            logger.info("Stratified sample: %d emails", len(df))
-            from src.data.labeler import label_distribution
-            label_distribution(df)
-        return df
-
-    # ── Full preprocessed file exists — skip raw loading/preprocessing ────────
-    if processed_csv.exists() and not skip_preprocessing:
+    # ── Preprocessed file exists — skip raw loading/preprocessing ────────────
+    if processed_csv.exists():
         logger.info(
             "Preprocessed file already exists at %s. "
             "Using it to avoid reprocessing. Pass --force-preprocess to redo.",
@@ -152,15 +136,14 @@ def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
     logger.info("Loading raw email data (dataset=%s)...", dataset)
     if dataset == "enron":
         df = load_enron()
-    elif dataset == "spamassassin":
-        df = load_spamassassin()
     else:
         df = load_all()
 
     if df.empty:
         raise SystemExit(
             "ERROR: No emails loaded. "
-            "Make sure email files are in data/raw/enron/ and/or data/raw/spamassassin/."
+            "Make sure the brianray Enron dataset is in data/raw/enron/ "
+            "and/or Nazario .mbox files are in data/raw/phishing/."
         )
 
     logger.info("Preprocessing text...")
@@ -177,7 +160,7 @@ def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df.to_csv(processed_csv, index=False)
-    logger.info("Full preprocessed data saved to %s (%d emails)", processed_csv, len(df))
+    logger.info("Preprocessed data saved to %s (%d emails)", processed_csv, len(df))
 
     if max_samples and len(df) > max_samples:
         df = _stratified_sample(df, max_samples)
@@ -185,9 +168,6 @@ def load_data(dataset: str, skip_preprocessing: bool, max_samples: int = None):
         from src.data.labeler import label_distribution
         label_distribution(df)
 
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_csv(processed_csv, index=False)
-    logger.info("Processed data saved to %s", processed_csv)
     return df
 
 
@@ -308,7 +288,7 @@ def main():
     if args.add_phishing:
         df = append_phishing()
     else:
-        df = load_data(args.dataset, args.skip_preprocessing, args.max_samples)
+        df = load_data(args.dataset, args.max_samples)
 
     df_train, df_test = train_test_split(
         df,

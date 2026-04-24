@@ -1,4 +1,4 @@
-"""Map raw labels to 6-class schema using CMU annotations where available, keywords as fallback."""
+"""Map raw labels to 4-class schema using CMU annotations where available, keywords as fallback."""
 
 import logging
 
@@ -8,8 +8,6 @@ from config.settings import (
     CMU_LABEL_MAP,
     PERSONAL_KEYWORDS,
     PHISHING_KEYWORDS,
-    PROMOTIONS_KEYWORDS,
-    SOCIAL_KEYWORDS,
     WORK_KEYWORDS,
 )
 
@@ -86,15 +84,10 @@ def _label_from_keywords(row: pd.Series) -> str:
         return "spam"
 
     # ham — check in priority order
-    if _contains_any(combined, PROMOTIONS_KEYWORDS):
-        return "promotions"
-    if _contains_any(combined, SOCIAL_KEYWORDS):
-        return "social"
     if _contains_any(combined, WORK_KEYWORDS):
         return "work"
     if _contains_any(combined, PERSONAL_KEYWORDS):
         return "personal"
-    # Default: if subject/body sounds professional default to work, else personal
     return "work"
 
 
@@ -110,8 +103,8 @@ def _assign_label(row: pd.Series) -> str:
 
 def apply_labels(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Add a `label` column with one of 6 class values:
-        spam, phishing, promotions, social, personal, work
+    Add a `label` column with one of 4 class values:
+        spam, phishing, personal, work
 
     Uses CMU annotation columns (Cat1..Cat9, level_weight) when present,
     otherwise falls back to keyword heuristics.
